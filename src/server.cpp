@@ -66,7 +66,7 @@ void write_data(int clientarray[]){
         con_var.notify_one();
         // if (data.size() == 0){
         //     printf("save file to ./receivefile.txt\r\n");
-        //     fclose(fp);
+        //     close(connfd);
         //     break;
         // }
         //fwrite((void *)data.data(), 1, data.size(), fp);

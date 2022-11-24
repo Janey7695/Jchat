@@ -15,7 +15,12 @@
 #include "cJSON.h"
 using namespace std;
 
-
+#define KEEP_CUR_LOCATION printf("\033[s")
+#define RESET_CUR_LOCATION printf("\033[u")
+#define MOVE_L(x) printf("\033[%dD",(x))
+#define MOVE_R(x) printf("\033[%dC",(x))
+#define RESET_CUR printf("\033[H")
+#define MOVE_TO_LINEHEAD printf("\r")
 #define DEFAULT_SERVER_PORT 6666
 #define BUFFER_MAXSIZE 1024
 const char* input_sign = "|/-\\";
@@ -24,6 +29,7 @@ void show_inputsign();
 void send_data(int &connfd);
 void recv_data(int &connfd);
 void get_stdin(char *sendbuf,int &connfd);
+char inputbuf[BUFFER_MAXSIZE];
 char sendbuf[BUFFER_MAXSIZE];
 char receivebuf[BUFFER_MAXSIZE];
 char userename[20];
@@ -65,8 +71,8 @@ int main(int argc,char* argv[]){
     
     //指定服务器端的ip
     //inet_addr()函数，将点分十进制IP转换成网络字节序IP
-    serverAddr.sin_addr.s_addr = inet_addr("114.132.245.124");
-    //serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    //serverAddr.sin_addr.s_addr = inet_addr("114.132.245.124");
+    serverAddr.sin_addr.s_addr = inet_addr("192.168.0.106");
 
     if(connect(clientSocket, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0) {
         perror("connect error");
@@ -74,7 +80,6 @@ int main(int argc,char* argv[]){
     }
 
     printf("Welcome %s ,let's see what people talk about. Enjoy!\r\n",argv[1]);
-
     thread thread_showsign(show_inputsign);
     thread thread_readstdin(get_stdin,ref(sendbuf),ref(clientSocket));
     thread thread_senddata(send_data,ref(clientSocket));
@@ -93,18 +98,35 @@ int main(int argc,char* argv[]){
 cJSON* create_json_message(){
     cJSON* cjson_message = NULL;
     cjson_message = cJSON_CreateObject();
-    cJSON_AddStringToObject(cjson_message,"content",sendbuf);
+    cJSON_AddStringToObject(cjson_message,"content",inputbuf);
     cJSON_AddStringToObject(cjson_message,"sender",userename);
     return cjson_message;
+}
+
+void parse_json_message(char *buff){
+    cJSON* cjson_message = NULL;
+    cJSON* cjson_name = NULL;
+    cJSON* cjson_content = NULL;
+    cjson_message = cJSON_Parse(buff);
+    cjson_name = cJSON_GetObjectItem(cjson_message,"sender");
+    cjson_content = cJSON_GetObjectItem(cjson_message,"content");
+    printf("\r%s -> All : %s \n",cjson_name->valuestring,cjson_content->valuestring);
+    cJSON_Delete(cjson_message);
+
 }
 
 
 void show_inputsign(){
     int current_input_sign = 2;
     while(!progress_over_flag){
-        printf("\r%c",input_sign[current_input_sign--]);
+        KEEP_CUR_LOCATION;
+        MOVE_TO_LINEHEAD;
+        printf("%c",input_sign[current_input_sign--]);
         if(current_input_sign < 0) current_input_sign = 2;
         fflush(stdout);
+        RESET_CUR_LOCATION;
+        fflush(stdout);
+        
         usleep(500000);
     }
 }
@@ -112,15 +134,29 @@ void show_inputsign(){
 void get_stdin(char *sendbuf,int &connfd){
     cJSON* cjson;
     char* str;
+    // int c = '\0';
+    int input_ptr = 0;
     while(!progress_over_flag){
         //printf("??\n");
-        fgets(sendbuf,1024,stdin);
-        if(sendbuf[0]=='.' && sendbuf[1] == 'Q'){
+        // while(c != 13){
+        //     c = fgetc(stdin);
+        //     inputbuf[input_ptr++] = (char)c;
+        //     if(c == '\b'){
+        //         if(input_ptr != 0) 
+        //         inputbuf[--input_ptr] = '\0';
+        //     }
+        // }
+        // printf("?\n");
+        // printf("> ");
+        // fflush(stdout);
+        fgets(inputbuf,1024,stdin);
+        if(inputbuf[0]=='.' && inputbuf[1] == 'Q'){
             progress_over_flag = 1;
             //close(connfd);
             printf("Byee~\r\n");
         }
         cjson = create_json_message();
+        memset(sendbuf, 0, 1024);  
         strcpy(sendbuf,cJSON_Print(cjson));
         cJSON_Delete(cjson);
         input_over_flag = 1;
@@ -151,8 +187,11 @@ void recv_data(int &connfd){
         size_t n = recv(connfd, buff, 1024, 0);
         if(n == 0){
             close(connfd);
+            printf("server stop!\n");
+            progress_over_flag = 1;
             break;
         }
-        printf("%s\n",buff);
+        parse_json_message(buff);
+        // printf("%s\n",buff);
     }
 }
