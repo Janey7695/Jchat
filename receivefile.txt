@@ -1,4 +1,0 @@
-{
-	"content":	"hello\n",
-	"sender":	"sss"
-}
