@@ -23,10 +23,11 @@ int input_over_flag = 0;
 void show_inputsign();
 void send_data(int &connfd);
 void recv_data(int &connfd);
-void get_stdin(char *sendbuf);
+void get_stdin(char *sendbuf,int &connfd);
 char sendbuf[BUFFER_MAXSIZE];
 char receivebuf[BUFFER_MAXSIZE];
 char userename[20];
+int progress_over_flag = 0;
 
 int main(int argc,char* argv[]){
 
@@ -75,15 +76,13 @@ int main(int argc,char* argv[]){
     printf("Welcome %s ,let's see what people talk about. Enjoy!\r\n",argv[1]);
 
     thread thread_showsign(show_inputsign);
-    thread thread_readstdin(get_stdin,ref(sendbuf));
+    thread thread_readstdin(get_stdin,ref(sendbuf),ref(clientSocket));
     thread thread_senddata(send_data,ref(clientSocket));
     thread thread_receivedata(recv_data,ref(clientSocket));
     thread_showsign.join();
     thread_senddata.join();
     thread_readstdin.join();
     thread_receivedata.join();
-    while (1) {
-    }
 
     close(clientSocket);
     
@@ -102,7 +101,7 @@ cJSON* create_json_message(){
 
 void show_inputsign(){
     int current_input_sign = 2;
-    while(1){
+    while(!progress_over_flag){
         printf("\r%c",input_sign[current_input_sign--]);
         if(current_input_sign < 0) current_input_sign = 2;
         fflush(stdout);
@@ -110,24 +109,30 @@ void show_inputsign(){
     }
 }
 
-void get_stdin(char *sendbuf){
+void get_stdin(char *sendbuf,int &connfd){
     cJSON* cjson;
     char* str;
-    while(1){
+    while(!progress_over_flag){
         //printf("??\n");
         fgets(sendbuf,1024,stdin);
+        if(sendbuf[0]=='.' && sendbuf[1] == 'Q'){
+            progress_over_flag = 1;
+            //close(connfd);
+            printf("Byee~\r\n");
+        }
         cjson = create_json_message();
         strcpy(sendbuf,cJSON_Print(cjson));
         cJSON_Delete(cjson);
         input_over_flag = 1;
         //printf("??\n");
+        
     }
 }
 
 void send_data(int &connfd){
     int len=0;
     char *eod = "";
-    while(1){
+    while(!progress_over_flag){
         if(input_over_flag){
             //printf("your send %d bytes\n",len);
             len = strlen(sendbuf);
@@ -144,6 +149,10 @@ void recv_data(int &connfd){
     char buff[BUFFER_MAXSIZE] = {0};
     while(1){
         size_t n = recv(connfd, buff, 1024, 0);
+        if(n == 0){
+            close(connfd);
+            break;
+        }
         printf("%s\n",buff);
     }
 }

@@ -40,11 +40,12 @@ void recv_data(int &connfd){
                 { return !(data_que.size() == 20); });
             // std::cout << "read " << data.size() <<" bytes"<< endl;
             // data_que.push(data);
-            // if (n == 0){
-            //     data_que.push(data);
-            //     con_var.notify_one();
-            //     break;
-            // }
+            if (n == 0){
+                data_que.push(data);
+                con_var.notify_one();
+                close(connfd);
+                break;
+            }
             cout << "read " << data.size() <<" bytes"<< endl;
             data_que.push(data);
             con_var.notify_one();
